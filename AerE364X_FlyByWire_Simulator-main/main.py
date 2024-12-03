@@ -38,7 +38,8 @@ dynamic_model.enable_vertical_motion= True
 # You may also want variables for other values such as your chosen PWM frequency,
 
 frqcy= 40
-pulse_read= pulseio.PulseIn(board.D5,maxlen=6)
+pulse_read_heading= pulseio.PulseIn(board.D5,maxlen=6)
+pulse_read_lift= pulseio.PulseIn(board.D5,maxlen=6)
 out_cmd_rotation=0 #in degrees
 out_cmd_rotation_duty_cycle= 3932  #3932=1.5ms @40Hz
 read_cmd_rotation=0
@@ -76,7 +77,7 @@ while True:
     print(f't_1 is {t_1}')
     pulse_cmd_read=0
     # Wait until pulses have been received on pin D5
-    while (len(pulse_read)) == 0 :
+    while (len(pulse_read_heading)) == 0 :
         time.sleep(0.1)
         print("nothing yet")
 
@@ -84,10 +85,10 @@ while True:
     
     # Then get them with the popleft() method
     # keeping the newest plausible pulse. Then pause, clear, and resume. 
-    while len(pulse_read)>2:     #remove pulse until 2 are left,
-        pulse_read.popleft() 
+    while len(pulse_read_heading)>2:     #remove pulse until 2 are left,
+        pulse_read_heading.popleft() 
         #print("too much")
-    pulse_cmd_read=pulse_read.popleft()
+    pulse_cmd_read=pulse_read_heading.popleft()
     ##print("only 1 remain")
     
     if pulse_cmd_read>2001:  #bad pulse
