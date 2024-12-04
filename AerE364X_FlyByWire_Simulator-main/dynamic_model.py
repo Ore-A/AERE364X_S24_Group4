@@ -124,6 +124,8 @@ class dynamic_model_interactor(object):
         with self.model.model_lock:
             if self.slider is not None:
                 self.model.ROTCMD = int(self.slider.val*1000)
+                #print("Hi")
+                #print(f'ROTCMD {self.model.ROTCMD}')
                 pass
 
             if self.altitude_slider is not None:
