@@ -68,7 +68,7 @@ led= digitalio.DigitalInOut(board.D13)
 led.direction=digitalio.Direction.OUTPUT
 led.value = False
 i=0
-for i<100:
+for i in range(100):
     Alt=bmp.altitude
     i=i+1
 
@@ -207,7 +207,7 @@ while True:
     Right_fan.duty_cycle= 3932+ (out_cmd_alt_ms*2.62) #3932=1.5ms @40Hz
     Left_fan.duty_cycle= 3932+ (out_cmd_alt_ms*2.62) #3932=1.5ms @40Hz
     Back_fan.duty_cycle= 3932+ (out_cmd_rotation_ms*2.62) #2621=1ms @40Hz
-    servo_control.duty_cycle= out_cmd_servo
+    Left_servo_control.duty_cycle= out_cmd_servo
         
         
     Previous_Alt=Current_Alt
