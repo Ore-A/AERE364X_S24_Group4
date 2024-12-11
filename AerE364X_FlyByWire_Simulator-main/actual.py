@@ -58,7 +58,7 @@ Previous_Alt=0
 Right_fan=pwmio.PWMOut(board.D10,frequency= frqcy, duty_cycle=out_cmd_rotation_duty_cycle) #lift and thrust
 Left_fan=pwmio.PWMOut(board.D9,frequency= frqcy, duty_cycle=out_cmd_rotation_duty_cycle) #lift and thrust
 Back_fan=pwmio.PWMOut(board.D11,frequency= frqcy, duty_cycle=out_cmd_rotation_duty_cycle)   #Heading fan
-Left_servo_control=pwmio.PWMOut(board.D13,frequency=40, duty_cycle=out_cmd_rotation_duty_cycle) #convert some lift in thrust 
+Servo_control=pwmio.PWMOut(board.D13,frequency=40, duty_cycle=out_cmd_rotation_duty_cycle) #convert some lift in thrust 
 #Left_servo_control=pwmio.PWMOut(board.D13,frequency=40, duty_cycle=out_cmd_rotation_duty_cycle) #left and right are mirrored
 #i2c, bmp, BNO055
 i2c = busio.I2C(board.SCL, board.SDA)
@@ -207,7 +207,7 @@ while True:
     Right_fan.duty_cycle= 3932+ (out_cmd_alt_ms*2.62) #3932=1.5ms @40Hz
     Left_fan.duty_cycle= 3932+ (out_cmd_alt_ms*2.62) #3932=1.5ms @40Hz
     Back_fan.duty_cycle= 3932+ (out_cmd_rotation_ms*2.62) #2621=1ms @40Hz
-    Left_servo_control.duty_cycle= out_cmd_servo
+    Servo_control.duty_cycle= out_cmd_servo
         
         
     Previous_Alt=Current_Alt
