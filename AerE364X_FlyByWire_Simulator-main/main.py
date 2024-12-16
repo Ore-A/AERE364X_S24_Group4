@@ -11,7 +11,7 @@ import pulse_commands
 # when running on real hardware) 
 import dynamic_model
 dynamic_model.enable_wind= False   # Set this to True to add a moment from the wind
-dynamic_model.enable_vertical_motion= True
+dynamic_model.enable_vertical_motion= False
 
 # ***NOTE*** Do not get the various files which are part of the simulator
 # (adafruit_bno055.py, busio.py, board.py, etc.) confused with similarly
@@ -118,7 +118,7 @@ while True:
         ##print (Heading)
         # Determine the commanded orientation based on from your pulse input from
         # pin D5
-    read_cmd_rotation= (Heading_cmd_read-1500)*0.36 #will give an angle in degrees (-180 to 180)
+    read_cmd_rotation= (2000-1500)*0.360 #will give an angle in degrees (-180 to 180)
     read_cmd_Altitude= (Lift_cmd_read-1000)/100 #give you altitude in m
         # Select a coefficient for the proportional term
         # It will probably have units similar to output_command_ms/degree
@@ -167,7 +167,7 @@ while True:
     out_cmd_alt= read_cmd_Altitude
     # out_cmd_alt=Kp_Alt_term+Ki_Alt_term
     out_cmd_alt_ms=out_cmd_alt*100
-    print(f'alt {Current_Alt}')
+    #print(f'alt {Current_Alt}')
         # Bound the output rotation command so that it cannot exceed 0.5 or be less than
         # -0.5 (note this is 500)
     if out_cmd_rotation_ms >500:
@@ -180,18 +180,19 @@ while True:
     if out_cmd_alt_ms < 0:
         out_cmd_alt_ms = 0
         
-    print(f'out cmd alt {out_cmd_alt_ms}')
+    print(f'out cmd {out_cmd_rotation}')
+    print(f'out cmd ms {out_cmd_rotation_ms}')
         ##print(out_cmd_rotation_ms)
         # Apply the output rotation command in opposite senses to determine the duty
         # cycle for the PWM outputs to the left- and right- side fans (pins D7, D8)
     Right_fan.duty_cycle= 3932 -(out_cmd_rotation_ms*2.62) #3932=1.5ms @40Hz
     Left_fan.duty_cycle= 3932+ (out_cmd_rotation_ms*2.62) #3932=1.5ms @40Hz
     Lift_fan.duty_cycle= 2621+ (out_cmd_alt_ms*2.62) #2621=1ms @40Hz
-        ##print (f'left fan is {Left_fan.duty_cycle}')
+    print (f'left fan is {Left_fan.duty_cycle}')
         ##print (f'right fan is {Right_fan.duty_cycle}')
         
     Previous_Alt=Current_Alt
-    time.sleep(0.1)
+    time.sleep(0.5)
     pass # Done with loop
 
 

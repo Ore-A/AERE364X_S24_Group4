@@ -8,11 +8,12 @@ import digitalio
 import pulseio
 import pulse_commands
 import adafruit_bmp3xx
-# Configuration of the simulator (will have to remove these lines
-# when running on real hardware) 
-import dynamic_model
-dynamic_model.enable_wind= False   # Set this to True to add a moment from the wind
-dynamic_model.enable_vertical_motion= True
+import measure_servofreq_adafruit_pca9685
+import adafruit_pca9685
+
+
+Altitude_hold = False
+Altitude_cmd = 0 #in m
 
 # ***NOTE*** Do not get the various files which are part of the simulator
 # (adafruit_bno055.py, busio.py, board.py, etc.) confused with similarly
@@ -50,27 +51,40 @@ out_cmd_rotation_duty_cycle= 3932  #3932=1.5ms @40Hz
 read_cmd_rotation=0
 out_cmd_alt=0
 out_cmd_servo=0
-H_Error=0
+H_error=0
 Current_Alt=0
 Previous_Alt=0
 
-#Fans #actual drone right and left thrust+Lift back for heading
-Right_fan=pwmio.PWMOut(board.D10,frequency= frqcy, duty_cycle=out_cmd_rotation_duty_cycle) #lift and thrust
-Left_fan=pwmio.PWMOut(board.D9,frequency= frqcy, duty_cycle=out_cmd_rotation_duty_cycle) #lift and thrust
-Back_fan=pwmio.PWMOut(board.D11,frequency= frqcy, duty_cycle=out_cmd_rotation_duty_cycle)   #Heading fan
-Left_servo_control=pwmio.PWMOut(board.D13,frequency=40, duty_cycle=out_cmd_rotation_duty_cycle) #convert some lift in thrust 
-#Left_servo_control=pwmio.PWMOut(board.D13,frequency=40, duty_cycle=out_cmd_rotation_duty_cycle) #left and right are mirrored
 #i2c, bmp, BNO055
 i2c = busio.I2C(board.SCL, board.SDA)
 bmp = adafruit_bmp3xx.BMP3XX_I2C(i2c)
+servo_breakout = adafruit_pca9685.PCA9685(i2c)
+servo_breakout.frequency= 40
 sensor = adafruit_bno055.BNO055_I2C(i2c)
 led= digitalio.DigitalInOut(board.D13)
 led.direction=digitalio.Direction.OUTPUT
 led.value = False
+
+#measurement
+servo_breakout.channels[15].duty_cycle=int(1.5e-3*40*65536)
+PWMfreq = measure_servofreq_adafruit_pca9685.measure_servofreq(servo_breakout,15,board.D26)
+
+#Fans #could left and right pigtailed
+Right_fan=servo_breakout.channels[1] #lift and thrust
+Left_fan=servo_breakout.channels[2] #lift and thrust
+Back_fan=servo_breakout.channels[3]   #Heading fan
+Right_fan.duty_cycle = int(1e-3*65536*PWMfreq) #initialize at 1ms
+Left_fan.duty_cycle = int(1e-3*65536*PWMfreq) #initialize at 1ms
+Back_fan.duty_cycle = int(1.5e-3*65536*PWMfreq) #initialize at 1.5ms
+#servos, need to be mirrored
+Left_servo_control=servo_breakout.channels[4] #convert some lift in thrust 
+Right_servo_control=servo_breakout.channels[5] 
+Left_servo_control.duty_cycle= int(1e-3*65536*PWMfreq)
+
 i=0
-for i<100:
-    Alt=bmp.altitude
-    i=i+1
+# for i<100:
+#     Alt=bmp.altitude
+#     i=i+1
 
 Kp_coefficient=0.5
 Kp_term=0
@@ -97,8 +111,8 @@ while True:
     
     dt= time.monotonic() - t_1
     t_1=time.monotonic()
-    print(f'dt is {dt}')
-    print(f't_1 is {t_1}')
+    #print(f'dt is {dt}')
+    #print(f't_1 is {t_1}')
 
     Heading_cmd_read=0
     Lift_cmd_read=0
@@ -114,7 +128,7 @@ while True:
         time.sleep(0.1)
         print("no lift yet")
 
-    
+    #Assign a value to be used from read signals
     (Lift_cmd_read, Heading_cmd_read, Thrust_cmd_read) = pulse_commands.get_pulse_commands ([pulse_read_lift,pulse_read_heading, pulse_read_Thrust])
 
      
@@ -128,13 +142,13 @@ while True:
     # Extract the euler angles (Heading, Roll, Pitch)
     # in degrees from the IMU
     [Heading, Roll, Pitch]= sensor.euler
-    Current_Alt= dynamic_model.dynamic_instance.pos[2]    ###Need to update with BNo55 or pressure altimeter
-        ##print (Heading)
+    Current_Alt= 0     ###Need to update with bmp
+
     # Determine the commanded orientation based on from your pulse input from
     # pin D5
     read_cmd_rotation= (Heading_cmd_read-1500)*0.36 #will give an angle in degrees (-180 to 180)
-    read_cmd_Altitude= (Lift_cmd_read-1000)/100 #give you altitude in m - currently 10m max if commanding to set height
-    read_cmd_Thrust= (Thrust_cmd_read) ##map to servo cmd? if there is demand fro thrust move servo 15deggrees forward?
+    read_cmd_Lift= (Lift_cmd_read-1000) #give you us signal
+    read_cmd_Thrust= (Thrust_cmd_read-1500) ##map to servo cmd? if there is demand fro thrust move servo 15deggrees forward?
     # Select a coefficient for the proportional term
     # It will probably have units similar to output_command_ms/degree
     # Determine the proportional term by obtaining the error (subtracting
@@ -148,70 +162,80 @@ while True:
     # Python modulus operator (%) to get the remainder when dividing by
     # 360, then subtract 180 deg., e.g. replace simple subtraction with
     #  ((Heading_command - Heading + 360 + 180) % 360  - 180)
-    H_Error= ((read_cmd_rotation - Heading + 360 + 180) % 360  - 180)
-    Alt_error= read_cmd_Altitude-Current_Alt
-    print (f'the error is {H_Error}degrees')
-    print (f'the Alt error is {Alt_error}')
-    Kp_term= H_Error*Kp_coefficient
-    Kp_Alt_term= Alt_error*Kp_Alt_coefficient
-    Kd_term= sensor.gyro[2]*Kd_coefficient
-    Kd__Alt_term= Kd_Alt_coefficient* (Current_Alt-Previous_Alt)/dt
-    Ki_term= Ki_coefficient*H_Error*dt + Ki_term
-    Ki_Alt_term= Ki_Alt_coefficient*Alt_error*dt + Ki_Alt_term
+    #H_Error= ((read_cmd_rotation - Heading + 360 + 180) % 360  - 180)
+    H_error= (read_cmd_rotation-sensor.gyro[2]*180/3.14159)
+    #print (f'the error is {H_Error}degrees')
+    #print (f'the Alt error is {Alt_error}')
+    #Kp_term= H_Error*Kp_coefficient
+    #Kd_term= sensor.gyro[2]*Kd_coefficient
+    #Ki_term= Ki_coefficient*H_Error*dt + Ki_term
+    # if Ki_term >100:
+    #     Ki_term = 100
+    # if Ki_term < -100:
+    #     Ki_term = -100
+    # out_cmd_rotation=Kp_term+Kd_term+Ki_term
+    # out_cmd_rotation_us=out_cmd_rotation/0.36
+    
+    out_cmd_rotation_us= H_error/0.36
+    
 
-    if Ki_term >100:
-        Ki_term = 100
-    if Ki_term < -100:
-        Ki_term = -100
+    if Altitude_hold == True:
+        Alt_error= Altitude_cmd-Current_Alt
 
-    if Ki_Alt_term >100:
-        Ki_Alt_term = 100
-    if Ki_Alt_term < -100:
-        Ki_Alt_term = -100
+        Kp_Alt_term= Alt_error*Kp_Alt_coefficient
+        Kd__Alt_term= Kd_Alt_coefficient* (Current_Alt-Previous_Alt)/dt
+        Ki_Alt_term= Ki_Alt_coefficient*Alt_error*dt + Ki_Alt_term
+
+        if Ki_Alt_term >100:
+            Ki_Alt_term = 100
+        if Ki_Alt_term < -100:
+            Ki_Alt_term = -100
         
+        out_cmd_alt=Kp_Alt_term+Kd__Alt_term+Ki_Alt_term
+        out_cmd_alt_us=out_cmd_alt
+    else:
+        out_cmd_alt= read_cmd_Lift
+        out_cmd_alt_us=out_cmd_alt*100
+
+    out_cmd_servo= read_cmd_Thrust*0.09 # 0.09 deg = 1us
     # #print (f'sensor gyro is {sensor.gyro[2]}')
     # #print (f'the Kp term is {Kp_term}')
     # #print (f'the Kd term is {Kd_term}')
     # #print (f'the Ki term is {Ki_term}')
-    # To start use just the proportional term to determine the output rotation
-    # command, which is an offset in ms from the nominal 1.5 ms that commands
-    # the fully reversing motors to not move
-    out_cmd_rotation=Kp_term+Kd_term+Ki_term
-    out_cmd_rotation_ms=out_cmd_rotation/0.36
 
-    out_cmd_alt= read_cmd_Altitude
-    # out_cmd_alt=Kp_Alt_term+Ki_Alt_term
-    out_cmd_alt_ms=out_cmd_alt*100
-    print(f'alt {Current_Alt}')
-        # Bound the output rotation command so that it cannot exceed 0.5 or be less than
-        # -0.5 (note this is 500)
-    if out_cmd_rotation_ms >500:
-        out_cmd_rotation_ms =500
-    if out_cmd_rotation_ms < -500:
-        out_cmd_rotation_ms = -500
+    
+    #print(f'alt {Current_Alt}')
 
-    if out_cmd_alt_ms >1000:
-        out_cmd_alt_ms =1000
-    if out_cmd_alt_ms < 0:
-        out_cmd_alt_ms = 0
+    # Bound the output rotation command so that it cannot exceed 0.5 or be less than
+    # -0.5 (note this is 500)
+    if out_cmd_rotation_us >500:
+        out_cmd_rotation_us =500
+    if out_cmd_rotation_us < -500:
+        out_cmd_rotation_us = -500
+
+    if out_cmd_alt_us >1000:
+        out_cmd_alt_us =1000
+    if out_cmd_alt_us < 0:
+        out_cmd_alt_us = 0
         
-    if out_cmd_servo > 5242:
-        out_cmd_servo=5242
-    if out_cmd_servo < 2621:
-        out_cmd_servo=2621
+        #servo moves 90deg over 1ms. 45deg in each direction? #limit at +1.55
+    if out_cmd_servo > 250:
+        out_cmd_servo= 250
+    if out_cmd_servo < -250:
+        out_cmd_servo= -250
 
-    print(f'out cmd alt {out_cmd_alt_ms}')
+    print(f'out cmd alt {out_cmd_alt_us}')
         ##print(out_cmd_rotation_ms)
         # Apply the output rotation command in opposite senses to determine the duty
         # cycle for the PWM outputs to the left- and right- side fans (pins D7, D8)
-    Right_fan.duty_cycle= 3932+ (out_cmd_alt_ms*2.62) #3932=1.5ms @40Hz
-    Left_fan.duty_cycle= 3932+ (out_cmd_alt_ms*2.62) #3932=1.5ms @40Hz
-    Back_fan.duty_cycle= 3932+ (out_cmd_rotation_ms*2.62) #2621=1ms @40Hz
-    servo_control.duty_cycle= out_cmd_servo
+    Right_fan.duty_cycle= int((1e-3 + out_cmd_alt_us/1000)*65536*PWMfreq) #3932=1.5ms @40Hz
+    Left_fan.duty_cycle= int((1e-3 + out_cmd_alt_us/1000)*65536*PWMfreq) #3932=1.5ms @40Hz
+    Back_fan.duty_cycle= int((1.5e-3 + out_cmd_rotation_us/1000)*65536*PWMfreq) #2621=1ms @40Hz
+    Left_servo_control.duty_cycle= int((1.5e-3 + out_cmd_servo/1000) *65536*PWMfreq)
+    Right_servo_control.duty_cycle= int((1.5e-3 - out_cmd_servo/1000) *65536*PWMfreq)
         
         
     Previous_Alt=Current_Alt
-    time.sleep(0.1)
     pass # Done with loop
 
 
