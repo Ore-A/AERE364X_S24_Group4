@@ -35,13 +35,11 @@ A CircuitPython implementation of a lighter-than-air vehicle control system feat
 ## Hardware Components
 - BNO055 IMU
 - PCA9685 PWM Controller
-- BMP3XX Altitude Sensor
 - Dual Servo Motors
 - Three Ducted Fans
 
 ## Features
 - Real-time orientation control
-- Altitude hold capability
 - Servo-controlled thrust vectoring
 - Wind disturbance rejection
 - Integrated PWM signal processing
